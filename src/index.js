@@ -11,6 +11,7 @@ const {
   AudioPlayerStatus,
  } = require("@discordjs/voice");
 const play = require("play-dl");
+const youtubeDl = require("youtube-dl-exec");
 
 
 const client = new Client({
@@ -64,6 +65,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
 
     try{
+        await interaction.deferReply();
+
         const connection = joinVoiceChannel({
             channelId: voiceChannel.id,
             guildId: interaction.guild.id,
@@ -78,15 +81,20 @@ client.on(Events.InteractionCreate, async (interaction) => {
         queue.push(song);
 
         if(player.state.status === AudioPlayerStatus.Idle){
-          await playNextSong();
-          await interaction.reply(`Now playing ${song.title}`);
+          const started = await playNextSong();
+
+          if(started){
+            await interaction.editReply(`Now playing ${song.title}`);
+          }else{
+            await interaction.editReply(`I found ${song.title}, but I could not start playback.`);
+          }
         }else{
-          await interaction.reply(`Added to queue: ${song.title}`);
+          await interaction.editReply(`Added to queue: ${song.title}`);
         }
     }catch(error){
         console.error(error);
 
-        if(interaction.replied){
+        if(interaction.deferred || interaction.replied){
           await interaction.followUp("I could not play that URL")
         }else{
           await interaction.reply("I could not play that URL.");
@@ -266,7 +274,28 @@ function isPlatformUrl(url) {
   );
 }
 
+function isYoutubeUrl(url) {
+  return url.includes("youtube.com") || url.includes("youtu.be");
+}
+
 async function createSongResource(song) {
+  if (isYoutubeUrl(song.url)) {
+    const audioUrl = await youtubeDl(song.url, {
+      getUrl: true,
+      format: "bestaudio",
+      noWarnings: true,
+      noCheckCertificates: true,
+    });
+    const streamUrl = String(audioUrl).trim().split(/\r?\n/)[0];
+    const response = await fetch(streamUrl);
+
+    if (!response.ok) {
+      throw new Error(`Could not download YouTube audio for ${song.url}`);
+    }
+
+    return createAudioResource(response.body);
+  }
+
   if (isPlatformUrl(song.url)) {
     const stream = await play.stream(song.url);
 
@@ -302,7 +331,7 @@ async function setupPlayDl() {
 async function playNextSong(){
   if(queue.length === 0){
     currentSong = null;
-    return;
+    return false;
   }
 
   const nextSong = queue.shift();
@@ -318,13 +347,20 @@ async function playNextSong(){
     }
 
     console.log(`Now playing ${nextSong.title}`);
+    return true;
   }catch(error){
     console.error(error);
-    playNextSong();
+    return playNextSong();
   }
 }
 
 player.on(AudioPlayerStatus.Idle, () => {
+  playNextSong();
+});
+
+player.on("error", (error) => {
+  console.error("Audio player error:");
+  console.error(error);
   playNextSong();
 });
 
