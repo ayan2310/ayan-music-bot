@@ -21,6 +21,7 @@ const player = createAudioPlayer();
 const queue = [];
 let currentConnection = null;
 let currentSong = null;
+let currentYoutubeProcess = null;
 client.once(Events.ClientReady, async (readyClient) => {
   await setupPlayDl();
   console.log(`Logged in as ${readyClient.user.tag}`);
@@ -105,6 +106,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
   if(interaction.commandName === "stop") {
     queue.length = 0;
     currentSong = null;
+    stopCurrentYoutubeProcess();
     player.stop();
     await interaction.reply("stopped the current song");
   }
@@ -116,6 +118,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await interaction.reply("I am not in a voice channel dumdum.");
       return;
     }
+    stopCurrentYoutubeProcess();
     connection.destroy();
     await interaction.reply("Left the vc :(");
   }
@@ -164,6 +167,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
+  stopCurrentYoutubeProcess();
   player.stop();
   await interaction.reply("Skipped the current song.");
 }
@@ -278,22 +282,48 @@ function isYoutubeUrl(url) {
   return url.includes("youtube.com") || url.includes("youtu.be");
 }
 
+function stopCurrentYoutubeProcess() {
+  if (currentYoutubeProcess && !currentYoutubeProcess.killed) {
+    currentYoutubeProcess.kill("SIGKILL");
+  }
+
+  currentYoutubeProcess = null;
+}
+
 async function createSongResource(song) {
   if (isYoutubeUrl(song.url)) {
-    const audioUrl = await youtubeDl(song.url, {
-      getUrl: true,
-      format: "bestaudio",
+    stopCurrentYoutubeProcess();
+
+    const subprocess = youtubeDl.exec(song.url, {
+      format: "bestaudio[ext=webm]/bestaudio",
+      output: "-",
+      quiet: true,
       noWarnings: true,
       noCheckCertificates: true,
+      noPlaylist: true,
     });
-    const streamUrl = String(audioUrl).trim().split(/\r?\n/)[0];
-    const response = await fetch(streamUrl);
+    currentYoutubeProcess = subprocess;
 
-    if (!response.ok) {
-      throw new Error(`Could not download YouTube audio for ${song.url}`);
-    }
+    subprocess.stderr.on("data", (data) => {
+      console.error(`yt-dlp: ${data}`);
+    });
 
-    return createAudioResource(response.body);
+    subprocess.on("close", () => {
+      if (currentYoutubeProcess === subprocess) {
+        currentYoutubeProcess = null;
+      }
+    });
+
+    subprocess.catch((error) => {
+      if (error.killed || error.signalCode === "SIGKILL") {
+        return;
+      }
+
+      console.error("yt-dlp process error:");
+      console.error(error);
+    });
+
+    return createAudioResource(subprocess.stdout);
   }
 
   if (isPlatformUrl(song.url)) {
@@ -361,6 +391,7 @@ player.on(AudioPlayerStatus.Idle, () => {
 player.on("error", (error) => {
   console.error("Audio player error:");
   console.error(error);
+  stopCurrentYoutubeProcess();
   playNextSong();
 });
 
