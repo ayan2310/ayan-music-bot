@@ -2,7 +2,7 @@ require("dotenv").config();
 
 process.env.FFMPEG_PATH = require("ffmpeg-static");
 
-const { Client, Events, GatewayIntentBits } = require("discord.js");
+const { Client, EmbedBuilder, Events, GatewayIntentBits } = require("discord.js");
 const { 
   createAudioPlayer,
   joinVoiceChannel,
@@ -12,7 +12,10 @@ const {
  } = require("@discordjs/voice");
 const play = require("play-dl");
 const youtubeDl = require("youtube-dl-exec");
-const { getRandomFangYuanQuote } = require("./fangyuan-quotes");
+const {
+  getRandomFangYuanImage,
+  getRandomFangYuanQuote,
+} = require("./fangyuan-quotes");
 
 
 const client = new Client({
@@ -174,7 +177,19 @@ client.on(Events.InteractionCreate, async (interaction) => {
 }
 
   if (interaction.commandName === "fangyuan") {
-    await interaction.reply(getRandomFangYuanQuote());
+    const quote = getRandomFangYuanQuote();
+    const image = getRandomFangYuanImage();
+    const embed = new EmbedBuilder()
+      .setColor(0x8b1e3f)
+      .setTitle("Fang Yuan Quote")
+      .setDescription(`"${quote}"`)
+      .setImage(image)
+      .setFooter({
+        text: "Requested wisdom. Delivered without hesitation.",
+      })
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
   }
 });
 
