@@ -57,7 +57,7 @@ const commands = [
 
     new SlashCommandBuilder()
     .setName("fangyuan")
-    .setDescription("Sends a random Fang Yuan-style quote")
+    .setDescription("Sends a random Fang Yuan quote card")
     .toJSON(),
 ];
 
