@@ -12,6 +12,7 @@ const {
  } = require("@discordjs/voice");
 const play = require("play-dl");
 const youtubeDl = require("youtube-dl-exec");
+const { getRandomFangYuanQuote } = require("./fangyuan-quotes");
 
 
 const client = new Client({
@@ -171,6 +172,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
   player.stop();
   await interaction.reply("Skipped the current song.");
 }
+
+  if (interaction.commandName === "fangyuan") {
+    await interaction.reply(getRandomFangYuanQuote());
+  }
 });
 
 function getSongTitle(url) {

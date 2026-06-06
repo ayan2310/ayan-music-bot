@@ -54,6 +54,11 @@ const commands = [
     .setName("skip")
     .setDescription("Skips the current playing song")
     .toJSON(),
+
+    new SlashCommandBuilder()
+    .setName("fangyuan")
+    .setDescription("Sends a random Fang Yuan-style quote")
+    .toJSON(),
 ];
 
 const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
